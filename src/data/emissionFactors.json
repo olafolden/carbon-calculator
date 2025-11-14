@@ -1,0 +1,82 @@
+{
+  "Roof": {
+    "factor": 12.5,
+    "unit": "kgCO2e/m²",
+    "material": "Typical roof assembly with insulation"
+  },
+  "Facade": {
+    "factor": 35.0,
+    "unit": "kgCO2e/m²",
+    "material": "Curtain wall facade system"
+  },
+  "Glazing": {
+    "factor": 45.0,
+    "unit": "kgCO2e/m²",
+    "material": "Double glazed window units"
+  },
+  "External Wall": {
+    "factor": 28.0,
+    "unit": "kgCO2e/m²",
+    "material": "Insulated external wall assembly"
+  },
+  "Beam -8.4 m": {
+    "factor": 650,
+    "unit": "kgCO2e/m",
+    "material": "Steel beam (typical section)"
+  },
+  "Beam -6.3 m": {
+    "factor": 550,
+    "unit": "kgCO2e/m",
+    "material": "Steel beam (medium section)"
+  },
+  "Column -8.4 m": {
+    "factor": 450,
+    "unit": "kgCO2e/m",
+    "material": "Reinforced concrete column (typical)"
+  },
+  "Column -6.3 m": {
+    "factor": 380,
+    "unit": "kgCO2e/m",
+    "material": "Reinforced concrete column (medium)"
+  },
+  "Floor Slab": {
+    "factor": 95.0,
+    "unit": "kgCO2e/m²",
+    "material": "Concrete floor slab with reinforcement"
+  },
+  "Composite Floor": {
+    "factor": 85.0,
+    "unit": "kgCO2e/m²",
+    "material": "Steel-concrete composite floor"
+  },
+  "Foundation": {
+    "factor": 120.0,
+    "unit": "kgCO2e/m²",
+    "material": "Concrete foundation slab"
+  },
+  "Basement Wall": {
+    "factor": 110.0,
+    "unit": "kgCO2e/m²",
+    "material": "Reinforced concrete basement wall"
+  },
+  "Pile": {
+    "factor": 850,
+    "unit": "kgCO2e/m",
+    "material": "Bored concrete pile"
+  },
+  "Ground Floor Slab": {
+    "factor": 75.0,
+    "unit": "kgCO2e/m²",
+    "material": "Ground bearing concrete slab"
+  },
+  "Staircase": {
+    "factor": 150.0,
+    "unit": "kgCO2e/m²",
+    "material": "Concrete staircase"
+  },
+  "Core Wall": {
+    "factor": 135.0,
+    "unit": "kgCO2e/m²",
+    "material": "Reinforced concrete core wall"
+  }
+}
