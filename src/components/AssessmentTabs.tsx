@@ -1,12 +1,13 @@
 import { useState, useRef, useEffect } from 'react';
 import { Assessment } from '../types';
+import { MAX_ASSESSMENT_NAME_LENGTH } from '../constants';
 
 interface AssessmentTabsProps {
   assessments: Assessment[];
   activeId: string | null;
   onTabClick: (id: string) => void;
   onTabClose: (id: string) => void;
-  onTabRename: (id: string, newName: string) => void;
+  onTabRename: (id: string, newName: string) => { success: boolean; error?: string };
   onNewAssessment: () => void;
   maxAssessments?: number;
 }
@@ -22,8 +23,10 @@ export default function AssessmentTabs({
 }: AssessmentTabsProps) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editValue, setEditValue] = useState('');
+  const [renameError, setRenameError] = useState<string | null>(null);
   const [showCloseConfirm, setShowCloseConfirm] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
 
   // Focus input when entering edit mode
   useEffect(() => {
@@ -36,19 +39,28 @@ export default function AssessmentTabs({
   const handleDoubleClick = (assessment: Assessment) => {
     setEditingId(assessment.id);
     setEditValue(assessment.name);
+    setRenameError(null);
   };
 
   const handleRenameSubmit = () => {
     if (editingId && editValue.trim()) {
-      onTabRename(editingId, editValue.trim());
+      const result = onTabRename(editingId, editValue.trim());
+
+      if (!result.success) {
+        // Show error - keep edit mode active
+        setRenameError(result.error || 'Failed to rename assessment');
+        return;
+      }
     }
     setEditingId(null);
     setEditValue('');
+    setRenameError(null);
   };
 
   const handleRenameCancel = () => {
     setEditingId(null);
     setEditValue('');
+    setRenameError(null);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -56,6 +68,35 @@ export default function AssessmentTabs({
       handleRenameSubmit();
     } else if (e.key === 'Escape') {
       handleRenameCancel();
+    }
+  };
+
+  const handleTabKeyDown = (e: React.KeyboardEvent, index: number) => {
+    let nextIndex: number | null = null;
+
+    switch (e.key) {
+      case 'ArrowLeft':
+        nextIndex = index > 0 ? index - 1 : assessments.length - 1;
+        break;
+      case 'ArrowRight':
+        nextIndex = index < assessments.length - 1 ? index + 1 : 0;
+        break;
+      case 'Home':
+        nextIndex = 0;
+        break;
+      case 'End':
+        nextIndex = assessments.length - 1;
+        break;
+      default:
+        return;
+    }
+
+    if (nextIndex !== null) {
+      e.preventDefault();
+      onTabClick(assessments[nextIndex].id);
+      // Focus the next tab
+      const tabElements = document.querySelectorAll('[role="tab"]');
+      (tabElements[nextIndex] as HTMLElement)?.focus();
     }
   };
 
@@ -77,13 +118,70 @@ export default function AssessmentTabs({
 
   const assessmentToClose = assessments.find((a) => a.id === showCloseConfirm);
 
+  // Focus trapping for dialog
+  useEffect(() => {
+    if (showCloseConfirm && dialogRef.current) {
+      const previouslyFocused = document.activeElement as HTMLElement;
+
+      // Focus first focusable element in dialog
+      const focusableElements = dialogRef.current.querySelectorAll(
+        'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+      );
+
+      if (focusableElements.length > 0) {
+        (focusableElements[0] as HTMLElement).focus();
+      }
+
+      // Trap focus
+      const handleTab = (e: KeyboardEvent) => {
+        if (e.key !== 'Tab' || !dialogRef.current) return;
+
+        const firstElement = focusableElements[0] as HTMLElement;
+        const lastElement = focusableElements[focusableElements.length - 1] as HTMLElement;
+
+        if (e.shiftKey && document.activeElement === firstElement) {
+          e.preventDefault();
+          lastElement.focus();
+        } else if (!e.shiftKey && document.activeElement === lastElement) {
+          e.preventDefault();
+          firstElement.focus();
+        }
+      };
+
+      // Close on Escape
+      const handleEscape = (e: KeyboardEvent) => {
+        if (e.key === 'Escape') {
+          cancelClose();
+        }
+      };
+
+      document.addEventListener('keydown', handleTab);
+      document.addEventListener('keydown', handleEscape);
+
+      return () => {
+        document.removeEventListener('keydown', handleTab);
+        document.removeEventListener('keydown', handleEscape);
+        previouslyFocused?.focus();
+      };
+    }
+  }, [showCloseConfirm]);
+
   return (
     <>
       <div className="bg-gray-100 border-b-2 border-gray-300 px-4 py-2">
-        <div className="max-w-7xl mx-auto flex items-center gap-2 overflow-x-auto">
-          {assessments.map((assessment) => (
+        <div
+          role="tablist"
+          aria-label="Assessment tabs"
+          className="max-w-7xl mx-auto flex items-center gap-2 overflow-x-auto"
+        >
+          {assessments.map((assessment, index) => (
             <div
               key={assessment.id}
+              role="tab"
+              id={`tab-${assessment.id}`}
+              aria-selected={assessment.id === activeId}
+              aria-controls={`tabpanel-${assessment.id}`}
+              tabIndex={assessment.id === activeId ? 0 : -1}
               className={`
                 flex items-center gap-2 px-4 py-2 rounded-t-lg border cursor-pointer
                 transition-all duration-200 whitespace-nowrap
@@ -95,19 +193,47 @@ export default function AssessmentTabs({
               `}
               onClick={() => onTabClick(assessment.id)}
               onDoubleClick={() => handleDoubleClick(assessment)}
+              onKeyDown={(e) => handleTabKeyDown(e, index)}
             >
               {editingId === assessment.id ? (
-                <input
-                  ref={inputRef}
-                  type="text"
-                  value={editValue}
-                  onChange={(e) => setEditValue(e.target.value)}
-                  onBlur={handleRenameSubmit}
-                  onKeyDown={handleKeyDown}
-                  className="px-1 py-0.5 text-sm border border-gray-400 rounded text-gray-900 w-40"
-                  maxLength={30}
-                  onClick={(e) => e.stopPropagation()}
-                />
+                <div className="flex flex-col" onClick={(e) => e.stopPropagation()}>
+                  <div className="flex items-center gap-1">
+                    <input
+                      ref={inputRef}
+                      type="text"
+                      value={editValue}
+                      onChange={(e) => setEditValue(e.target.value)}
+                      onKeyDown={handleKeyDown}
+                      className={`px-1 py-0.5 text-sm border rounded text-gray-900 w-32 ${
+                        renameError ? 'border-red-500' : 'border-gray-400'
+                      }`}
+                      maxLength={MAX_ASSESSMENT_NAME_LENGTH}
+                      aria-invalid={!!renameError}
+                      aria-describedby={renameError ? 'rename-error' : undefined}
+                    />
+                    <button
+                      onClick={handleRenameSubmit}
+                      className="p-1 text-green-600 hover:bg-green-100 rounded text-sm"
+                      title="Save"
+                      aria-label="Save name"
+                    >
+                      ✓
+                    </button>
+                    <button
+                      onClick={handleRenameCancel}
+                      className="p-1 text-red-600 hover:bg-red-100 rounded text-sm"
+                      title="Cancel"
+                      aria-label="Cancel rename"
+                    >
+                      ✗
+                    </button>
+                  </div>
+                  {renameError && (
+                    <span id="rename-error" className="text-xs text-red-600 mt-1">
+                      {renameError}
+                    </span>
+                  )}
+                </div>
               ) : (
                 <span className="text-sm font-medium">{assessment.name}</span>
               )}
@@ -123,9 +249,22 @@ export default function AssessmentTabs({
                       : 'hover:bg-gray-200 text-gray-600'
                   }
                 `}
-                aria-label="Close assessment"
+                aria-label={`Close ${assessment.name}`}
               >
-                ×
+                <svg
+                  className="w-4 h-4"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                  aria-hidden="true"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M6 18L18 6M6 6l12 12"
+                  />
+                </svg>
               </button>
             </div>
           ))}
@@ -155,9 +294,14 @@ export default function AssessmentTabs({
 
       {/* Close Confirmation Dialog */}
       {showCloseConfirm && assessmentToClose && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg shadow-xl p-6 max-w-md w-full mx-4">
-            <h2 className="text-xl font-bold text-gray-900 mb-4">
+        <div
+          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="dialog-title"
+        >
+          <div ref={dialogRef} className="bg-white rounded-lg shadow-xl p-6 max-w-md w-full mx-4">
+            <h2 id="dialog-title" className="text-xl font-bold text-gray-900 mb-4">
               Close Assessment
             </h2>
             <p className="text-gray-700 mb-6">

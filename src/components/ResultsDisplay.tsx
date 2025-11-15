@@ -7,7 +7,8 @@ interface ResultsDisplayProps {
   assessment: Assessment;
 }
 
-export const ResultsDisplay: React.FC<ResultsDisplayProps> = React.memo(({ assessment }) => {
+export const ResultsDisplay: React.FC<ResultsDisplayProps> = React.memo(
+  ({ assessment }) => {
   const result = assessment.result;
   const handleExportCSV = useCallback(() => {
     const csv = exportToCSV(result);
@@ -175,6 +176,15 @@ export const ResultsDisplay: React.FC<ResultsDisplayProps> = React.memo(({ asses
       </div>
     </div>
   );
-});
+  },
+  (prevProps, nextProps) => {
+    // Only re-render if assessment ID, result, or name changed
+    return (
+      prevProps.assessment.id === nextProps.assessment.id &&
+      prevProps.assessment.result === nextProps.assessment.result &&
+      prevProps.assessment.name === nextProps.assessment.name
+    );
+  }
+);
 
 ResultsDisplay.displayName = 'ResultsDisplay';

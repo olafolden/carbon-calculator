@@ -6,6 +6,8 @@ import { SystemChart } from './components/SystemChart';
 import AssessmentTabs from './components/AssessmentTabs';
 import ReplaceAssessmentDialog from './components/ReplaceAssessmentDialog';
 import { useAssessments } from './hooks/useAssessments';
+import { processJSONFile } from './utils/fileProcessor';
+import { MAX_ASSESSMENTS } from './constants';
 import emissionFactorsData from './data/emissionFactors.json';
 import { logger } from './utils/logger';
 
@@ -15,7 +17,13 @@ function App() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [showReplaceDialog, setShowReplaceDialog] = useState(false);
   const [pendingUpload, setPendingUpload] = useState<{ data: BuildingData; filename: string } | null>(null);
+  const [isProcessing, setIsProcessing] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Error callback for assessments hook
+  const handleAssessmentError = (error: { message: string; field: string }) => {
+    setErrors([error]);
+  };
 
   // Use the assessments hook
   const {
@@ -27,7 +35,7 @@ function App() {
     replaceAssessment,
     updateAssessmentName,
     setActive,
-  } = useAssessments(emissionFactors);
+  } = useAssessments(emissionFactors, handleAssessmentError);
 
   useEffect(() => {
     // Validate emission factors on mount
@@ -59,23 +67,40 @@ function App() {
     }
   }, []);
 
-  const handleDataLoaded = (data: BuildingData, filename: string) => {
+  const handleDataLoaded = async (data: BuildingData, filename: string) => {
     if (!emissionFactors) {
       setErrors([{ field: 'system', message: 'Emission factors not loaded' }]);
       return;
     }
 
-    setErrors([]);
-
-    // Check if at max capacity (5 assessments)
-    if (assessments.length >= 5) {
-      setPendingUpload({ data, filename });
-      setShowReplaceDialog(true);
+    if (isProcessing) {
+      console.warn('Upload already in progress');
       return;
     }
 
-    // Add new assessment
-    addAssessment(data, filename);
+    setIsProcessing(true);
+    setErrors([]);
+
+    try {
+      // Use setTimeout to allow UI to update
+      await new Promise(resolve => setTimeout(resolve, 0));
+
+      // Check if at max capacity
+      if (assessments.length >= MAX_ASSESSMENTS) {
+        setPendingUpload({ data, filename });
+        setShowReplaceDialog(true);
+        return;
+      }
+
+      // Add new assessment
+      addAssessment(data, filename);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to process file';
+      setErrors([{ field: 'system', message }]);
+      console.error('Error processing file:', error);
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
   const handleError = (validationErrors: ValidationError[]) => {
@@ -91,8 +116,26 @@ function App() {
   };
 
   const handleNewAssessment = () => {
+    if (!fileInputRef.current) {
+      console.error('File input ref not attached');
+      setErrors([{
+        field: 'system',
+        message: 'File upload is not available. Please refresh the page.'
+      }]);
+      return;
+    }
+
     // Trigger file input
-    fileInputRef.current?.click();
+    fileInputRef.current.click();
+  };
+
+  const handleReplaceCancel = () => {
+    setShowReplaceDialog(false);
+    setPendingUpload(null);
+    // Reset file input
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
   };
 
   if (loadError) {
@@ -116,6 +159,14 @@ function App() {
 
   return (
     <div className="min-h-screen bg-gray-50">
+      {/* Skip to main content link */}
+      <a
+        href="#main-content"
+        className="sr-only focus:not-sr-only focus:absolute focus:top-0 focus:left-0 focus:z-50 focus:p-4 focus:bg-blue-600 focus:text-white focus:no-underline"
+      >
+        Skip to main content
+      </a>
+
       {/* Header */}
       <header className="bg-white shadow">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
@@ -135,12 +186,12 @@ function App() {
           onTabClose={removeAssessment}
           onTabRename={updateAssessmentName}
           onNewAssessment={handleNewAssessment}
-          maxAssessments={5}
+          maxAssessments={MAX_ASSESSMENTS}
         />
       )}
 
       {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <main id="main-content" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {assessments.length === 0 ? (
           <div className="space-y-6">
             <FileUpload onDataLoaded={handleDataLoaded} onError={handleError} />
@@ -206,7 +257,12 @@ function App() {
             </div>
           </div>
         ) : activeAssessment ? (
-          <div className="space-y-6">
+          <div
+            role="tabpanel"
+            id={`tabpanel-${activeAssessment.id}`}
+            aria-labelledby={`tab-${activeAssessment.id}`}
+            className="space-y-6"
+          >
             <ResultsDisplay assessment={activeAssessment} />
             <SystemChart assessment={activeAssessment} />
           </div>
@@ -219,36 +275,34 @@ function App() {
         type="file"
         accept=".json"
         style={{ display: 'none' }}
-        onChange={(e) => {
+        onChange={async (e) => {
           const file = e.target.files?.[0];
           if (file) {
-            const reader = new FileReader();
-            reader.onload = (event) => {
-              try {
-                const content = event.target?.result as string;
-                const jsonData = JSON.parse(content);
-                handleDataLoaded(jsonData as BuildingData, file.name);
-              } catch (error) {
-                const message = error instanceof Error ? error.message : 'Invalid JSON file';
-                setErrors([{ field: 'file', message }]);
-              }
-            };
-            reader.readAsText(file);
+            await processJSONFile(file, handleDataLoaded, handleError);
           }
           // Reset input
           e.target.value = '';
         }}
       />
 
+      {/* Loading Overlay */}
+      {isProcessing && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white p-6 rounded-lg shadow-lg">
+            <div className="flex items-center space-x-3">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+              <p className="text-gray-700 font-medium">Calculating emissions...</p>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Replace Assessment Dialog */}
       {showReplaceDialog && (
         <ReplaceAssessmentDialog
           assessments={assessments}
           onSelect={handleReplaceSelection}
-          onCancel={() => {
-            setShowReplaceDialog(false);
-            setPendingUpload(null);
-          }}
+          onCancel={handleReplaceCancel}
         />
       )}
 

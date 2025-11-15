@@ -1,7 +1,8 @@
 import React, { useCallback } from 'react';
 import { useDropzone } from 'react-dropzone';
 import { BuildingData, ValidationError } from '../types';
-import { validateBuildingData } from '../utils/calculator';
+import { processJSONFile } from '../utils/fileProcessor';
+import { MAX_FILE_SIZE } from '../constants';
 
 interface FileUploadProps {
   onDataLoaded: (data: BuildingData, filename: string) => void;
@@ -9,83 +10,14 @@ interface FileUploadProps {
 }
 
 export const FileUpload: React.FC<FileUploadProps> = ({ onDataLoaded, onError }) => {
-  const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
-  const MAX_JSON_DEPTH = 20; // Increased to accommodate complex building data structures
-
   const onDrop = useCallback(
-    (acceptedFiles: File[]) => {
+    async (acceptedFiles: File[]) => {
       if (acceptedFiles.length === 0) return;
 
       const file = acceptedFiles[0];
-      const filename = file.name;
 
-      // Validate file size
-      if (file.size > MAX_FILE_SIZE) {
-        onError([{
-          field: 'file',
-          message: `File too large. Maximum size is ${MAX_FILE_SIZE / 1024 / 1024}MB`
-        }]);
-        return;
-      }
-
-      const reader = new FileReader();
-
-      reader.onload = (event) => {
-        try {
-          const content = event.target?.result as string;
-
-          // Check content length
-          if (content.length > MAX_FILE_SIZE) {
-            onError([{ field: 'file', message: 'File content too large' }]);
-            return;
-          }
-
-          // Parse with reviver to prevent prototype pollution
-          const jsonData = JSON.parse(content, function reviver(key, value) {
-            if (key === '__proto__' || key === 'constructor' || key === 'prototype') {
-              return undefined; // Prevent prototype pollution
-            }
-            return value;
-          });
-
-          // Check depth after parsing
-          const checkDepth = (obj: unknown, currentDepth = 0): number => {
-            if (obj === null || typeof obj !== 'object') {
-              return currentDepth;
-            }
-            if (currentDepth > MAX_JSON_DEPTH) {
-              throw new Error(`JSON structure too deeply nested (depth: ${currentDepth}, max: ${MAX_JSON_DEPTH})`);
-            }
-            let maxDepth = currentDepth;
-            const values = Array.isArray(obj) ? obj : Object.values(obj);
-            for (const value of values) {
-              const depth = checkDepth(value, currentDepth + 1);
-              maxDepth = Math.max(maxDepth, depth);
-            }
-            return maxDepth;
-          };
-
-          const actualDepth = checkDepth(jsonData);
-          console.log(`JSON depth: ${actualDepth}, max allowed: ${MAX_JSON_DEPTH}`);
-
-          const errors = validateBuildingData(jsonData);
-
-          if (errors.length > 0) {
-            onError(errors);
-          } else {
-            onDataLoaded(jsonData as BuildingData, filename);
-          }
-        } catch (error) {
-          const message = error instanceof Error ? error.message : 'Invalid JSON file';
-          onError([{ field: 'file', message }]);
-        }
-      };
-
-      reader.onerror = () => {
-        onError([{ field: 'file', message: 'Error reading file' }]);
-      };
-
-      reader.readAsText(file);
+      // Use the shared file processor
+      await processJSONFile(file, onDataLoaded, onError);
     },
     [onDataLoaded, onError]
   );

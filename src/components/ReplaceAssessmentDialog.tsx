@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Assessment } from '../types';
+import { MAX_ASSESSMENTS } from '../constants';
 
 interface ReplaceAssessmentDialogProps {
   assessments: Assessment[];
@@ -12,7 +13,15 @@ export default function ReplaceAssessmentDialog({
   onSelect,
   onCancel,
 }: ReplaceAssessmentDialogProps) {
-  const [selectedId, setSelectedId] = useState<string>(assessments[0]?.id || '');
+  // Validate assessments prop
+  if (!assessments || assessments.length === 0) {
+    console.error('ReplaceAssessmentDialog shown with no assessments');
+    onCancel(); // Auto-close
+    return null;
+  }
+
+  const [selectedId, setSelectedId] = useState<string>(assessments[0].id);
+  const dialogRef = useRef<HTMLDivElement>(null);
 
   const handleConfirm = () => {
     if (selectedId) {
@@ -21,7 +30,7 @@ export default function ReplaceAssessmentDialog({
   };
 
   const formatDate = (timestamp: number) => {
-    return new Date(timestamp).toLocaleString('en-US', {
+    return new Date(timestamp).toLocaleString(undefined, {
       month: 'short',
       day: 'numeric',
       hour: '2-digit',
@@ -29,14 +38,67 @@ export default function ReplaceAssessmentDialog({
     });
   };
 
+  // Focus trapping for dialog
+  useEffect(() => {
+    if (dialogRef.current) {
+      const previouslyFocused = document.activeElement as HTMLElement;
+
+      // Focus first focusable element in dialog
+      const focusableElements = dialogRef.current.querySelectorAll(
+        'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+      );
+
+      if (focusableElements.length > 0) {
+        (focusableElements[0] as HTMLElement).focus();
+      }
+
+      // Trap focus
+      const handleTab = (e: KeyboardEvent) => {
+        if (e.key !== 'Tab' || !dialogRef.current) return;
+
+        const firstElement = focusableElements[0] as HTMLElement;
+        const lastElement = focusableElements[focusableElements.length - 1] as HTMLElement;
+
+        if (e.shiftKey && document.activeElement === firstElement) {
+          e.preventDefault();
+          lastElement.focus();
+        } else if (!e.shiftKey && document.activeElement === lastElement) {
+          e.preventDefault();
+          firstElement.focus();
+        }
+      };
+
+      // Close on Escape
+      const handleEscape = (e: KeyboardEvent) => {
+        if (e.key === 'Escape') {
+          onCancel();
+        }
+      };
+
+      document.addEventListener('keydown', handleTab);
+      document.addEventListener('keydown', handleEscape);
+
+      return () => {
+        document.removeEventListener('keydown', handleTab);
+        document.removeEventListener('keydown', handleEscape);
+        previouslyFocused?.focus();
+      };
+    }
+  }, [onCancel]);
+
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg shadow-xl p-6 max-w-2xl w-full mx-4">
-        <h2 className="text-2xl font-bold text-gray-900 mb-2">
+    <div
+      className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="replace-dialog-title"
+    >
+      <div ref={dialogRef} className="bg-white rounded-lg shadow-xl p-6 max-w-2xl w-full mx-4">
+        <h2 id="replace-dialog-title" className="text-2xl font-bold text-gray-900 mb-2">
           Maximum Assessments Reached
         </h2>
         <p className="text-gray-600 mb-6">
-          You can have up to {assessments.length} assessments open at a time.
+          You can have up to {MAX_ASSESSMENTS} assessments open at a time.
           Please select which assessment to replace:
         </p>
 

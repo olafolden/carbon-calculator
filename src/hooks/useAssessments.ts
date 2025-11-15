@@ -1,12 +1,21 @@
 import { useState, useCallback } from 'react';
 import { Assessment, BuildingData, EmissionFactorsDatabase } from '../types';
 import { calculateCarbonEmissions } from '../utils/calculator';
+import { MAX_ASSESSMENT_NAME_LENGTH } from '../constants';
 
 /**
- * Generates a unique ID based on timestamp and random number
+ * Generates a unique ID using crypto.randomUUID or fallback
  */
 function generateUniqueId(): string {
-  return `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  // Use crypto.randomUUID if available (modern browsers)
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+    return crypto.randomUUID();
+  }
+  // Fallback with counter to prevent collisions
+  const timestamp = Date.now();
+  const random1 = Math.random().toString(36).slice(2, 11);
+  const random2 = Math.random().toString(36).slice(2, 11);
+  return `${timestamp}-${random1}-${random2}`;
 }
 
 /**
@@ -14,19 +23,33 @@ function generateUniqueId(): string {
  * Removes .json extension and handles special characters
  */
 export function extractFilename(filename: string): string {
-  let name = filename;
+  let name = filename.trim();
 
-  // Remove .json extension
-  if (name.toLowerCase().endsWith('.json')) {
-    name = name.slice(0, -5);
+  // Handle empty or just extension
+  if (!name || name === '.json') {
+    return 'Untitled';
   }
 
-  // Truncate if too long (max 30 chars for display)
-  if (name.length > 30) {
-    name = name.slice(0, 27) + '...';
+  // Remove all .json extensions (handles .backup.json, etc.)
+  name = name.replace(/\.json$/i, '');
+
+  // Remove leading/trailing dots and spaces
+  name = name.replace(/^[.\s]+|[.\s]+$/g, '');
+
+  // Replace sequences of special chars with single space
+  name = name.replace(/[^\w\s-]/g, ' ').replace(/\s+/g, ' ').trim();
+
+  // Handle still empty after cleaning
+  if (!name) {
+    return 'Untitled';
   }
 
-  return name.trim() || 'Untitled';
+  // Truncate if too long
+  if (name.length > MAX_ASSESSMENT_NAME_LENGTH) {
+    name = name.slice(0, MAX_ASSESSMENT_NAME_LENGTH - 3) + '...';
+  }
+
+  return name;
 }
 
 /**
@@ -51,7 +74,10 @@ function ensureUniqueName(name: string, existingNames: string[]): string {
 /**
  * Custom hook for managing multiple carbon assessments
  */
-export function useAssessments(emissionFactors: EmissionFactorsDatabase | null) {
+export function useAssessments(
+  emissionFactors: EmissionFactorsDatabase | null,
+  onError?: (error: { message: string; field: string }) => void
+) {
   const [assessments, setAssessments] = useState<Assessment[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
 
@@ -61,35 +87,53 @@ export function useAssessments(emissionFactors: EmissionFactorsDatabase | null) 
   const addAssessment = useCallback(
     (buildingData: BuildingData, filename: string) => {
       if (!emissionFactors) {
-        console.error('Cannot add assessment: emission factors not loaded');
-        return;
+        const error = {
+          field: 'system',
+          message: 'Cannot add assessment: emission factors not loaded',
+        };
+        console.error(error.message);
+        onError?.(error);
+        return { success: false, error: error.message };
       }
 
-      // Generate unique ID
-      const id = generateUniqueId();
+      try {
+        // Generate unique ID
+        const id = generateUniqueId();
 
-      // Extract and ensure unique name
-      const baseName = extractFilename(filename);
-      const existingNames = assessments.map((a) => a.name);
-      const name = ensureUniqueName(baseName, existingNames);
+        // Use functional update to avoid stale closure
+        setAssessments((prev) => {
+          // Extract and ensure unique name using prev state
+          const baseName = extractFilename(filename);
+          const existingNames = prev.map((a) => a.name);
+          const name = ensureUniqueName(baseName, existingNames);
 
-      // Calculate emissions
-      const result = calculateCarbonEmissions(buildingData, emissionFactors);
+          // Calculate emissions with error handling
+          const result = calculateCarbonEmissions(buildingData, emissionFactors);
 
-      // Create new assessment
-      const newAssessment: Assessment = {
-        id,
-        name,
-        buildingData,
-        result,
-        timestamp: Date.now(),
-      };
+          // Create new assessment
+          const newAssessment: Assessment = {
+            id,
+            name,
+            buildingData,
+            result,
+            timestamp: Date.now(),
+          };
 
-      // Add to assessments and set as active
-      setAssessments((prev) => [...prev, newAssessment]);
-      setActiveId(id);
+          return [...prev, newAssessment];
+        });
+
+        // Set active after state update
+        setActiveId(id);
+        return { success: true, id };
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Calculation failed';
+        const errorObj = { field: 'calculation', message };
+        console.error('Failed to add assessment:', error);
+        onError?.(errorObj);
+        return { success: false, error: message };
+      }
     },
-    [assessments, emissionFactors]
+    [emissionFactors, onError]
   );
 
   /**
@@ -97,20 +141,25 @@ export function useAssessments(emissionFactors: EmissionFactorsDatabase | null) 
    */
   const removeAssessment = useCallback(
     (id: string) => {
+      const wasActive = id === activeId;
+
       setAssessments((prev) => {
         const filtered = prev.filter((a) => a.id !== id);
 
-        // If removing active assessment, set next one as active
-        if (id === activeId) {
-          if (filtered.length > 0) {
-            // Find the index of the removed assessment
-            const removedIndex = prev.findIndex((a) => a.id === id);
-            // Set the next assessment as active, or previous if it was the last one
-            const nextIndex = removedIndex < filtered.length ? removedIndex : filtered.length - 1;
-            setActiveId(filtered[nextIndex]?.id || null);
-          } else {
+        // If removing active assessment, calculate next active ID
+        if (wasActive && filtered.length > 0) {
+          const removedIndex = prev.findIndex((a) => a.id === id);
+          const nextIndex = removedIndex < filtered.length ? removedIndex : filtered.length - 1;
+          const nextActiveId = filtered[nextIndex]?.id || null;
+
+          // Use queueMicrotask to ensure proper state update order
+          queueMicrotask(() => {
+            setActiveId(nextActiveId);
+          });
+        } else if (filtered.length === 0) {
+          queueMicrotask(() => {
             setActiveId(null);
-          }
+          });
         }
 
         return filtered;
@@ -125,46 +174,61 @@ export function useAssessments(emissionFactors: EmissionFactorsDatabase | null) 
   const replaceAssessment = useCallback(
     (idToReplace: string, buildingData: BuildingData, filename: string) => {
       if (!emissionFactors) {
-        console.error('Cannot replace assessment: emission factors not loaded');
-        return;
+        const error = {
+          field: 'system',
+          message: 'Cannot replace assessment: emission factors not loaded',
+        };
+        console.error(error.message);
+        onError?.(error);
+        return { success: false, error: error.message };
       }
 
-      // Generate unique ID for new assessment
-      const id = generateUniqueId();
+      try {
+        // Generate unique ID for new assessment
+        const id = generateUniqueId();
 
-      // Extract and ensure unique name (excluding the one being replaced)
-      const baseName = extractFilename(filename);
-      const existingNames = assessments
-        .filter((a) => a.id !== idToReplace)
-        .map((a) => a.name);
-      const name = ensureUniqueName(baseName, existingNames);
+        // Use functional update to avoid stale closure
+        setAssessments((prev) => {
+          // Extract and ensure unique name (excluding the one being replaced)
+          const baseName = extractFilename(filename);
+          const existingNames = prev
+            .filter((a) => a.id !== idToReplace)
+            .map((a) => a.name);
+          const name = ensureUniqueName(baseName, existingNames);
 
-      // Calculate emissions
-      const result = calculateCarbonEmissions(buildingData, emissionFactors);
+          // Calculate emissions with error handling
+          const result = calculateCarbonEmissions(buildingData, emissionFactors);
 
-      // Create new assessment
-      const newAssessment: Assessment = {
-        id,
-        name,
-        buildingData,
-        result,
-        timestamp: Date.now(),
-      };
+          // Create new assessment
+          const newAssessment: Assessment = {
+            id,
+            name,
+            buildingData,
+            result,
+            timestamp: Date.now(),
+          };
 
-      // Replace in array
-      setAssessments((prev) => {
-        const index = prev.findIndex((a) => a.id === idToReplace);
-        if (index === -1) return prev;
+          // Replace in array
+          const index = prev.findIndex((a) => a.id === idToReplace);
+          if (index === -1) return prev;
 
-        const updated = [...prev];
-        updated[index] = newAssessment;
-        return updated;
-      });
+          const updated = [...prev];
+          updated[index] = newAssessment;
+          return updated;
+        });
 
-      // Set new assessment as active
-      setActiveId(id);
+        // Set new assessment as active
+        setActiveId(id);
+        return { success: true, id };
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Calculation failed';
+        const errorObj = { field: 'calculation', message };
+        console.error('Failed to replace assessment:', error);
+        onError?.(errorObj);
+        return { success: false, error: message };
+      }
     },
-    [assessments, emissionFactors]
+    [emissionFactors, onError]
   );
 
   /**
@@ -174,35 +238,43 @@ export function useAssessments(emissionFactors: EmissionFactorsDatabase | null) 
     (id: string, newName: string) => {
       const trimmedName = newName.trim();
 
-      // Validate name
-      if (!trimmedName) {
-        console.warn('Assessment name cannot be empty');
-        return false;
+      // Use functional update to get current state
+      let validationError: string | null = null;
+
+      setAssessments((prev) => {
+        // Validate name
+        if (!trimmedName) {
+          validationError = 'Assessment name cannot be empty';
+          return prev;
+        }
+
+        if (trimmedName.length > MAX_ASSESSMENT_NAME_LENGTH) {
+          validationError = `Assessment name cannot exceed ${MAX_ASSESSMENT_NAME_LENGTH} characters`;
+          return prev;
+        }
+
+        // Check for duplicates (excluding current assessment)
+        const existingNames = prev
+          .filter((a) => a.id !== id)
+          .map((a) => a.name);
+
+        if (existingNames.includes(trimmedName)) {
+          validationError = 'Assessment name must be unique';
+          return prev;
+        }
+
+        // Update name
+        return prev.map((a) => (a.id === id ? { ...a, name: trimmedName } : a));
+      });
+
+      if (validationError) {
+        console.warn(validationError);
+        return { success: false, error: validationError };
       }
 
-      if (trimmedName.length > 30) {
-        console.warn('Assessment name cannot exceed 30 characters');
-        return false;
-      }
-
-      // Check for duplicates (excluding current assessment)
-      const existingNames = assessments
-        .filter((a) => a.id !== id)
-        .map((a) => a.name);
-
-      if (existingNames.includes(trimmedName)) {
-        console.warn('Assessment name must be unique');
-        return false;
-      }
-
-      // Update name
-      setAssessments((prev) =>
-        prev.map((a) => (a.id === id ? { ...a, name: trimmedName } : a))
-      );
-
-      return true;
+      return { success: true };
     },
-    [assessments]
+    []
   );
 
   /**
