@@ -12,6 +12,26 @@ dist
 dist-ssr
 *.local
 
+# Build cache
+node_modules/.vite/
+node_modules/.esbuild/
+
+# TypeScript build info
+*.tsbuildinfo
+tsconfig.incremental.json
+
+# Lock files from other package managers
+yarn.lock
+pnpm-lock.yaml
+bun.lockb
+
+# Environment variables (security)
+.env
+.env.local
+.env.*.local
+.env.production
+.env.development
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

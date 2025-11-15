@@ -1,0 +1,44 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash .claude/scripts/log-change.sh 'Edit' \"$TOOL_INPUT_FILE_PATH\" \"Modified file\""
+          }
+        ]
+      },
+      {
+        "matcher": "Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash .claude/scripts/log-change.sh 'Write' \"$TOOL_INPUT_FILE_PATH\" \"Created/Updated file\""
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash .claude/scripts/log-change.sh 'Bash' \"$TOOL_INPUT_COMMAND\" \"Executed command\""
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash .claude/scripts/log-session.sh"
+          }
+        ]
+      }
+    ]
+  }
+}
