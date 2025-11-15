@@ -1,17 +1,33 @@
-import { useState, useEffect } from 'react';
-import { BuildingData, CalculationResult, ValidationError, EmissionFactorsDatabase, EmissionFactor } from './types';
-import { calculateCarbonEmissions } from './utils/calculator';
+import { useState, useEffect, useRef } from 'react';
+import { BuildingData, ValidationError, EmissionFactorsDatabase, EmissionFactor } from './types';
 import { FileUpload } from './components/FileUpload';
 import { ResultsDisplay } from './components/ResultsDisplay';
 import { SystemChart } from './components/SystemChart';
+import AssessmentTabs from './components/AssessmentTabs';
+import ReplaceAssessmentDialog from './components/ReplaceAssessmentDialog';
+import { useAssessments } from './hooks/useAssessments';
 import emissionFactorsData from './data/emissionFactors.json';
 import { logger } from './utils/logger';
 
 function App() {
-  const [result, setResult] = useState<CalculationResult | null>(null);
   const [errors, setErrors] = useState<ValidationError[]>([]);
   const [emissionFactors, setEmissionFactors] = useState<EmissionFactorsDatabase | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [showReplaceDialog, setShowReplaceDialog] = useState(false);
+  const [pendingUpload, setPendingUpload] = useState<{ data: BuildingData; filename: string } | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Use the assessments hook
+  const {
+    assessments,
+    activeAssessment,
+    activeId,
+    addAssessment,
+    removeAssessment,
+    replaceAssessment,
+    updateAssessmentName,
+    setActive,
+  } = useAssessments(emissionFactors);
 
   useEffect(() => {
     // Validate emission factors on mount
@@ -43,7 +59,7 @@ function App() {
     }
   }, []);
 
-  const handleDataLoaded = (data: BuildingData) => {
+  const handleDataLoaded = (data: BuildingData, filename: string) => {
     if (!emissionFactors) {
       setErrors([{ field: 'system', message: 'Emission factors not loaded' }]);
       return;
@@ -51,19 +67,32 @@ function App() {
 
     setErrors([]);
 
-    // Calculate emissions
-    const calculationResult = calculateCarbonEmissions(data, emissionFactors);
-    setResult(calculationResult);
+    // Check if at max capacity (5 assessments)
+    if (assessments.length >= 5) {
+      setPendingUpload({ data, filename });
+      setShowReplaceDialog(true);
+      return;
+    }
+
+    // Add new assessment
+    addAssessment(data, filename);
   };
 
   const handleError = (validationErrors: ValidationError[]) => {
     setErrors(validationErrors);
-    setResult(null);
   };
 
-  const handleReset = () => {
-    setResult(null);
-    setErrors([]);
+  const handleReplaceSelection = (idToReplace: string) => {
+    if (pendingUpload) {
+      replaceAssessment(idToReplace, pendingUpload.data, pendingUpload.filename);
+      setPendingUpload(null);
+      setShowReplaceDialog(false);
+    }
+  };
+
+  const handleNewAssessment = () => {
+    // Trigger file input
+    fileInputRef.current?.click();
   };
 
   if (loadError) {
@@ -97,9 +126,22 @@ function App() {
         </div>
       </header>
 
+      {/* Assessment Tabs - only show if there are assessments */}
+      {assessments.length > 0 && (
+        <AssessmentTabs
+          assessments={assessments}
+          activeId={activeId}
+          onTabClick={setActive}
+          onTabClose={removeAssessment}
+          onTabRename={updateAssessmentName}
+          onNewAssessment={handleNewAssessment}
+          maxAssessments={5}
+        />
+      )}
+
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {!result ? (
+        {assessments.length === 0 ? (
           <div className="space-y-6">
             <FileUpload onDataLoaded={handleDataLoaded} onError={handleError} />
 
@@ -114,7 +156,7 @@ function App() {
                   Validation Errors:
                 </h3>
                 <ul className="list-disc list-inside space-y-1">
-                  {errors.map((error, index) => (
+                  {errors.map((error) => (
                     <li key={`${error.field}-${error.message}`} className="text-sm text-red-700">
                       <span className="font-medium">{error.field}:</span> {error.message}
                     </li>
@@ -163,13 +205,52 @@ function App() {
               </div>
             </div>
           </div>
-        ) : (
+        ) : activeAssessment ? (
           <div className="space-y-6">
-            <ResultsDisplay result={result} onReset={handleReset} />
-            <SystemChart result={result} />
+            <ResultsDisplay assessment={activeAssessment} />
+            <SystemChart assessment={activeAssessment} />
           </div>
-        )}
+        ) : null}
       </main>
+
+      {/* Hidden file input for tab bar + button */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept=".json"
+        style={{ display: 'none' }}
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          if (file) {
+            const reader = new FileReader();
+            reader.onload = (event) => {
+              try {
+                const content = event.target?.result as string;
+                const jsonData = JSON.parse(content);
+                handleDataLoaded(jsonData as BuildingData, file.name);
+              } catch (error) {
+                const message = error instanceof Error ? error.message : 'Invalid JSON file';
+                setErrors([{ field: 'file', message }]);
+              }
+            };
+            reader.readAsText(file);
+          }
+          // Reset input
+          e.target.value = '';
+        }}
+      />
+
+      {/* Replace Assessment Dialog */}
+      {showReplaceDialog && (
+        <ReplaceAssessmentDialog
+          assessments={assessments}
+          onSelect={handleReplaceSelection}
+          onCancel={() => {
+            setShowReplaceDialog(false);
+            setPendingUpload(null);
+          }}
+        />
+      )}
 
       {/* Footer */}
       <footer className="bg-white border-t border-gray-200 mt-12">

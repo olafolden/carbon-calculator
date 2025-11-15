@@ -4,7 +4,7 @@ import { BuildingData, ValidationError } from '../types';
 import { validateBuildingData } from '../utils/calculator';
 
 interface FileUploadProps {
-  onDataLoaded: (data: BuildingData) => void;
+  onDataLoaded: (data: BuildingData, filename: string) => void;
   onError: (errors: ValidationError[]) => void;
 }
 
@@ -17,6 +17,7 @@ export const FileUpload: React.FC<FileUploadProps> = ({ onDataLoaded, onError })
       if (acceptedFiles.length === 0) return;
 
       const file = acceptedFiles[0];
+      const filename = file.name;
 
       // Validate file size
       if (file.size > MAX_FILE_SIZE) {
@@ -72,7 +73,7 @@ export const FileUpload: React.FC<FileUploadProps> = ({ onDataLoaded, onError })
           if (errors.length > 0) {
             onError(errors);
           } else {
-            onDataLoaded(jsonData as BuildingData);
+            onDataLoaded(jsonData as BuildingData, filename);
           }
         } catch (error) {
           const message = error instanceof Error ? error.message : 'Invalid JSON file';

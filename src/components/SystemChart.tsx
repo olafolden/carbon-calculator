@@ -1,14 +1,15 @@
 import React, { useMemo } from 'react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip, BarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts';
-import { CalculationResult } from '../types';
+import { Assessment } from '../types';
 
 interface SystemChartProps {
-  result: CalculationResult;
+  assessment: Assessment;
 }
 
 const COLORS = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899'];
 
-export const SystemChart: React.FC<SystemChartProps> = React.memo(({ result }) => {
+export const SystemChart: React.FC<SystemChartProps> = React.memo(({ assessment }) => {
+  const result = assessment.result;
   // Memoize expensive calculations
   const pieData = useMemo(() =>
     result.systems.map((system) => ({

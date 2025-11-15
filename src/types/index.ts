@@ -114,3 +114,19 @@ export interface ValidationError {
   /** Human-readable error message */
   message: string;
 }
+
+/**
+ * A single carbon assessment with its input data and calculation results
+ */
+export interface Assessment {
+  /** Unique identifier for this assessment */
+  id: string;
+  /** User-friendly name (from filename or user-provided) */
+  name: string;
+  /** Original building data that was uploaded */
+  buildingData: BuildingData;
+  /** Calculated carbon emission results */
+  result: CalculationResult;
+  /** Timestamp when the assessment was created (milliseconds since epoch) */
+  timestamp: number;
+}

@@ -1,14 +1,14 @@
 import React, { useCallback, useMemo } from 'react';
-import { CalculationResult } from '../types';
+import { Assessment } from '../types';
 import { exportToCSV, downloadFile } from '../utils/calculator';
 import { DEFAULT_BENCHMARK } from '../config/benchmarks';
 
 interface ResultsDisplayProps {
-  result: CalculationResult;
-  onReset: () => void;
+  assessment: Assessment;
 }
 
-export const ResultsDisplay: React.FC<ResultsDisplayProps> = React.memo(({ result, onReset }) => {
+export const ResultsDisplay: React.FC<ResultsDisplayProps> = React.memo(({ assessment }) => {
+  const result = assessment.result;
   const handleExportCSV = useCallback(() => {
     const csv = exportToCSV(result);
     downloadFile(csv, 'carbon-calculation.csv', 'text/csv');
@@ -34,16 +34,11 @@ export const ResultsDisplay: React.FC<ResultsDisplayProps> = React.memo(({ resul
 
   return (
     <div className="space-y-6">
-      {/* Header with actions */}
+      {/* Header */}
       <div className="flex justify-between items-center">
-        <h2 className="text-2xl font-bold text-gray-900">Carbon Calculation Results</h2>
-        <button
-          onClick={onReset}
-          aria-label="Reset calculator and upload new file"
-          className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-        >
-          Upload New File
-        </button>
+        <h2 className="text-2xl font-bold text-gray-900">
+          Carbon Calculation Results: <span className="text-blue-600">{assessment.name}</span>
+        </h2>
       </div>
 
       {/* Key Metrics */}
