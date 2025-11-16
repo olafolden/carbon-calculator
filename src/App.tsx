@@ -1,8 +1,9 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { BuildingData, ValidationError, EmissionFactorsDatabase, EmissionFactor } from './types';
+import { BuildingData, ValidationError, EmissionFactorsDatabase, EmissionFactor, AssessmentContentTabType } from './types';
 import { FileUpload } from './components/FileUpload';
-import { ResultsDisplay } from './components/ResultsDisplay';
-import { SystemChart } from './components/SystemChart';
+import { AssessmentContentTabs } from './components/AssessmentContentTabs';
+import { CarbonReportTab } from './components/CarbonReportTab';
+import { SLayersTab } from './components/SLayersTab';
 import AssessmentTabs from './components/AssessmentTabs';
 import ReplaceAssessmentDialog from './components/ReplaceAssessmentDialog';
 import { useAssessments } from './hooks/useAssessments';
@@ -19,6 +20,9 @@ function App() {
   const [pendingUpload, setPendingUpload] = useState<{ data: BuildingData; filename: string } | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Content tab state - always reset to carbon-report when switching assessments
+  const [activeContentTab, setActiveContentTab] = useState<AssessmentContentTabType>('carbon-report');
 
   // Error callback for assessments hook
   const handleAssessmentError = (error: { message: string; field: string }) => {
@@ -68,6 +72,11 @@ function App() {
       logger.error('Emission factors validation failed:', error);
     }
   }, []);
+
+  // Reset content tab to carbon-report when switching assessments
+  useEffect(() => {
+    setActiveContentTab('carbon-report');
+  }, [activeId]);
 
   const handleDataLoaded = async (data: BuildingData, filename: string) => {
     if (!emissionFactors) {
@@ -302,13 +311,51 @@ function App() {
             aria-labelledby={`tab-${activeAssessment.id}`}
             className="space-y-6"
           >
-            <ResultsDisplay
-              assessment={activeAssessment}
-              emissionFactors={emissionFactors}
-              onUpdateEmissionFactors={handleUpdateEmissionFactors}
-              onUpdateManualSystems={handleUpdateManualSystems}
+            {/* Assessment Header */}
+            <div className="bg-white p-6 rounded-lg shadow border border-gray-200">
+              <h2 className="text-2xl font-bold text-gray-900">
+                <span className="text-blue-600">{activeAssessment.name}</span>
+              </h2>
+              {activeAssessment.customEmissionFactors && (
+                <p className="text-sm text-blue-600 mt-1">
+                  Custom emission factors applied
+                </p>
+              )}
+              <p className="text-sm text-gray-600 mt-2">
+                GFA: {activeAssessment.result.gfa.toLocaleString()} m²
+              </p>
+            </div>
+
+            {/* Content Tabs */}
+            <AssessmentContentTabs
+              activeTab={activeContentTab}
+              onTabChange={setActiveContentTab}
+              assessmentId={activeAssessment.id}
             />
-            <SystemChart assessment={activeAssessment} />
+
+            {/* Tab Content */}
+            {activeContentTab === 'carbon-report' ? (
+              <div
+                role="tabpanel"
+                id={`content-tabpanel-${activeAssessment.id}-carbon-report`}
+                aria-labelledby={`content-tab-${activeAssessment.id}-carbon-report`}
+              >
+                <CarbonReportTab assessment={activeAssessment} />
+              </div>
+            ) : (
+              <div
+                role="tabpanel"
+                id={`content-tabpanel-${activeAssessment.id}-s-layers`}
+                aria-labelledby={`content-tab-${activeAssessment.id}-s-layers`}
+              >
+                <SLayersTab
+                  assessment={activeAssessment}
+                  emissionFactors={emissionFactors}
+                  onUpdateEmissionFactors={handleUpdateEmissionFactors}
+                  onUpdateManualSystems={handleUpdateManualSystems}
+                />
+              </div>
+            )}
           </div>
         ) : null}
       </main>

@@ -10,6 +10,231 @@
 
 ---
 
+## [Feature Update 4] - 2025-11-16
+
+### Tabbed Assessment Interface: Carbon Report & S-Layers
+
+**Summary:** Completely redesigned the assessment view with a two-tab interface separating reporting (Carbon Report) from configuration (S-Layers). Renamed "System" to "S-Layer" throughout the UI, renamed "Carbon Intensity" to "GWP", and integrated emission factors editing directly into the S-Layers tab without modal dialogs.
+
+### Major Changes
+
+- **Two-Tab Interface**
+  - **Carbon Report Tab:** Read-only view showing metrics, benchmarks, breakdowns, charts, and export options
+  - **S-Layers Tab:** Configuration view with manual inputs (Spaceplan/Service) and inline emission factors editing
+  - Accessible tab navigation with full ARIA support and keyboard shortcuts (Arrow keys, Home, End)
+  - Focus management for screen reader compatibility
+
+- **Terminology Updates**
+  - "System" → "S-Layer" throughout entire UI
+  - "Carbon Intensity" → "GWP" (Global Warming Potential)
+  - "System Type" → "S-Layer Type" in filters
+  - Maintained `sLayers` in JSON structure for backward compatibility
+
+- **Inline Emission Factors Editor**
+  - Replaced modal dialog with inline table editor in S-Layers tab
+  - Full search and filter capabilities (S-Layer type, unit type, keyword search)
+  - Inline validation with error summary display (no alert dialogs)
+  - Unsaved changes tracking with Cancel/Update buttons
+  - Sticky table header for improved usability
+
+- **Assessment Header**
+  - Centralized display above content tabs
+  - Shows assessment name, custom factors indicator, and GFA
+  - Provides context for both tabs
+
+### New Components Created
+
+1. **`src/components/AssessmentContentTabs.tsx`** (~132 lines)
+   - Tab navigation component with ARIA roles and keyboard support
+   - Arrow Left/Right navigation with wrap-around
+   - Home/End keys for quick navigation
+   - React.memo optimization with proper comparison function
+   - Focus management to prevent conflicts
+
+2. **`src/components/CarbonReportTab.tsx`** (~200 lines)
+   - Read-only metrics display component
+   - Key metrics: Total Embodied Carbon, GWP, Gross Floor Area
+   - Benchmark comparison (Low/Typical/High Carbon)
+   - S-Layer breakdown with progress bars
+   - Visual breakdown integration (charts)
+   - Export functionality (JSON/CSV)
+   - React.memo optimization
+
+3. **`src/components/SLayersTab.tsx`** (~68 lines)
+   - Configuration view component
+   - Manual S-Layer Inputs section (Spaceplan/Service)
+   - Emission Factors Editor section (inline table)
+   - Error handling for missing emission factors
+   - React.memo optimization
+
+4. **`src/components/EmissionFactorsEditor.tsx`** (~501 lines)
+   - Reusable inline emission factors editor
+   - Extracted from EmissionFactorModal for better architecture
+   - Complete search/filter functionality
+   - Inline validation with error summary
+   - Compact mode support
+   - React.memo optimization
+   - Performance: memoized data transformations
+
+### Components Removed
+
+1. **`src/components/ResultsDisplay.tsx`**
+   - Replaced by CarbonReportTab component
+   - Content split between Carbon Report and S-Layers tabs
+
+2. **`src/components/EmissionFactorModal.tsx`**
+   - Replaced by EmissionFactorsEditor component
+   - Modal interaction replaced with inline editing
+
+### Files Modified
+
+1. **`src/types/index.ts`**
+   - Added `AssessmentContentTabType` type union
+   - Added `ASSESSMENT_CONTENT_TABS` constant for tab display names
+   - Added UI label comment for SystemType ("S-Layer")
+   - Added prop interfaces:
+     - `AssessmentContentTabsProps`
+     - `CarbonReportTabProps`
+     - `SLayersTabProps`
+     - `EmissionFactorsEditorProps`
+
+2. **`src/components/SystemChart.tsx`**
+   - Updated "Distribution by System" → "Distribution by S-Layer"
+   - Updated "Emissions by System" → "Emissions by S-Layer"
+   - No structural changes
+
+3. **`src/App.tsx`**
+   - Added `AssessmentContentTabType` import
+   - Replaced ResultsDisplay/SystemChart imports with new tab components
+   - Added content tab state: `activeContentTab` with `setActiveContentTab`
+   - Added effect to reset tab to 'carbon-report' when switching assessments
+   - Added assessment header with name, custom factors indicator, GFA
+   - Implemented AssessmentContentTabs navigation
+   - Conditional rendering of CarbonReportTab and SLayersTab with ARIA attributes
+   - Proper tab panel structure for accessibility
+
+### Code Quality Improvements
+
+**Based on comprehensive code review:**
+
+1. **AssessmentContentTabs.tsx**
+   - Moved `TABS` array outside component to prevent recreation on every render
+   - Fixed React.memo comparison to include `onTabChange` callback
+   - Improved focus management in `handleTabClick` to prevent conflicts
+   - Stable references for `useCallback` dependencies
+
+2. **EmissionFactorsEditor.tsx**
+   - Replaced `alert()` with inline error summary display
+   - Better UX with non-blocking validation feedback
+   - Error count display for user awareness
+
+3. **Performance Optimizations**
+   - React.memo on all new components with custom comparison functions
+   - Memoized data transformations in EmissionFactorsEditor
+   - Stable callback references with useCallback
+   - Optimized re-render behavior
+
+4. **Accessibility Enhancements**
+   - Complete ARIA attribute mapping for tab navigation
+   - Keyboard navigation with proper focus trapping
+   - Screen reader support with semantic HTML
+   - Error announcements with `role="alert"`
+
+### Technical Architecture
+
+**Component Hierarchy:**
+```
+App
+└── AssessmentContentTabs (tab navigation)
+    ├── CarbonReportTab (read-only view)
+    │   └── SystemChart (visualizations)
+    └── SLayersTab (configuration view)
+        ├── ManualSystemInput (Spaceplan/Service)
+        └── EmissionFactorsEditor (inline table)
+```
+
+**State Management:**
+- Content tab state managed in App.tsx
+- Global tab state (resets to 'carbon-report' on assessment switch)
+- Preserves user experience with predictable behavior
+
+**Data Flow:**
+- No changes to data structures (sLayers unchanged)
+- No changes to calculation logic
+- Existing useAssessments hook reused
+- Props flow from App → Tabs → Components
+
+### Breaking Changes
+
+**None** - This is a UI/UX refactor with full backward compatibility:
+- JSON structure unchanged (sLayers property preserved)
+- Emission factor data format unchanged
+- Assessment data structure unchanged
+- All existing functionality preserved
+
+### User Experience Improvements
+
+1. **Clearer Mental Model**
+   - Separation of viewing (Carbon Report) from editing (S-Layers)
+   - Reduced cognitive load with focused tab content
+
+2. **Improved Workflow**
+   - No modal dialogs interrupting workflow
+   - Inline editing with immediate feedback
+   - Better visibility of all options
+
+3. **Enhanced Accessibility**
+   - Full keyboard navigation support
+   - Screen reader friendly with ARIA
+   - Logical tab order and focus management
+
+4. **Better Organization**
+   - Related functionality grouped logically
+   - Clear distinction between reports and configuration
+   - Emission factors and manual inputs together
+
+### Testing Checklist
+
+- [x] TypeScript compilation passes (npm run type-check)
+- [x] Tab navigation works (mouse and keyboard)
+- [x] Arrow keys navigate between tabs with wrap-around
+- [x] Home/End keys jump to first/last tab
+- [x] Carbon Report tab displays all metrics correctly
+- [x] GWP label shows instead of "Carbon Intensity"
+- [x] S-Layer labels show instead of "System"
+- [x] Manual inputs work in S-Layers tab
+- [x] Emission factors editor displays inline
+- [x] Search and filter work in emission factors
+- [x] Validation errors show inline (no alerts)
+- [x] Save/Cancel buttons appear with unsaved changes
+- [x] Tab resets to Carbon Report when switching assessments
+- [x] Export buttons work from Carbon Report tab
+- [x] Charts display correctly
+- [x] Assessment header shows above tabs
+- [x] ARIA attributes present for accessibility
+- [x] Focus management works correctly
+
+### Documentation
+
+- **feature-update-4.md** - Comprehensive feature documentation with architecture details, migration guide, and user guide
+
+### Performance Impact
+
+- **Bundle Size:** Slight increase (~10KB) from new components, offset by removing old components
+- **Runtime Performance:** Improved with React.memo optimizations and memoized calculations
+- **Re-renders:** Reduced unnecessary re-renders with proper comparison functions
+
+### Future Enhancements (Recommended)
+
+1. Error boundaries around tab content for fault tolerance
+2. Per-assessment tab memory (remember which tab was active)
+3. Debounced input validation in emission factors editor
+4. Code splitting for lazy loading of tab content
+5. Unit tests for new components
+6. E2E tests for tab navigation and workflow
+
+---
+
 ## [Feature Update 3] - 2025-11-16
 
 ### Manual Systems: Spaceplan and Service

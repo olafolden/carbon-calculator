@@ -36,7 +36,7 @@ export const SystemChart: React.FC<SystemChartProps> = React.memo(({ assessment 
         {/* Pie Chart */}
         <div>
           <h4 className="text-sm font-medium text-gray-700 mb-4 text-center">
-            Distribution by System
+            Distribution by S-Layer
           </h4>
           <ResponsiveContainer width="100%" height={300}>
             <PieChart>
@@ -65,7 +65,7 @@ export const SystemChart: React.FC<SystemChartProps> = React.memo(({ assessment 
         {/* Bar Chart */}
         <div>
           <h4 className="text-sm font-medium text-gray-700 mb-4 text-center">
-            Emissions by System (kgCO2e)
+            Emissions by S-Layer (kgCO2e)
           </h4>
           <ResponsiveContainer width="100%" height={300}>
             <BarChart data={barData}>

@@ -160,8 +160,22 @@ export interface Assessment {
 
 /**
  * Building system categories for emission factor classification
+ * UI Label: "S-Layer" (e.g., "S-Layer Type", "Breakdown by S-Layer")
  */
 export type SystemType = 'Skin' | 'Superstructure' | 'Substructure' | 'Spaceplan' | 'Service';
+
+/**
+ * Valid content tab identifiers within an assessment
+ */
+export type AssessmentContentTabType = 'carbon-report' | 's-layers';
+
+/**
+ * Display names for assessment content tabs
+ */
+export const ASSESSMENT_CONTENT_TABS = {
+  'carbon-report': 'Carbon Report',
+  's-layers': 'S-Layers'
+} as const;
 
 /**
  * Emission factor enriched with metadata for UI display
@@ -187,4 +201,54 @@ export interface EmissionFactorModalProps {
   onSave: (customFactors: EmissionFactorsDatabase) => void;
   /** Callback when user closes the modal without saving */
   onClose: () => void;
+}
+
+/**
+ * Props for the AssessmentContentTabs component
+ */
+export interface AssessmentContentTabsProps {
+  /** Currently active tab */
+  activeTab: AssessmentContentTabType;
+  /** Callback when user switches tabs */
+  onTabChange: (tab: AssessmentContentTabType) => void;
+  /** Assessment ID for ARIA controls */
+  assessmentId: string;
+}
+
+/**
+ * Props for the CarbonReportTab component
+ */
+export interface CarbonReportTabProps {
+  /** The assessment to display */
+  assessment: Assessment;
+}
+
+/**
+ * Props for the SLayersTab component
+ */
+export interface SLayersTabProps {
+  /** The assessment being edited */
+  assessment: Assessment;
+  /** Emission factors database (default + custom) */
+  emissionFactors: EmissionFactorsDatabase | null;
+  /** Callback when emission factors are updated */
+  onUpdateEmissionFactors: (customFactors: EmissionFactorsDatabase) => void;
+  /** Callback when manual systems are updated */
+  onUpdateManualSystems: (manualSystems: ManualSystemInputs) => void;
+}
+
+/**
+ * Props for the EmissionFactorsEditor component
+ */
+export interface EmissionFactorsEditorProps {
+  /** Default emission factors from the global database */
+  defaultFactors: EmissionFactorsDatabase;
+  /** Custom emission factors for this assessment (if any) */
+  customFactors?: EmissionFactorsDatabase;
+  /** Callback when emission factors are updated */
+  onUpdate: (customFactors: EmissionFactorsDatabase) => void;
+  /** Callback when validation state changes */
+  onValidationChange?: (hasErrors: boolean) => void;
+  /** Whether to show in compact mode (no modal padding) */
+  compact?: boolean;
 }
