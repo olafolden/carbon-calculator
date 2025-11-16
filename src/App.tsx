@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { BuildingData, ValidationError, EmissionFactorsDatabase, EmissionFactor } from './types';
 import { FileUpload } from './components/FileUpload';
 import { ResultsDisplay } from './components/ResultsDisplay';
@@ -34,6 +34,7 @@ function App() {
     removeAssessment,
     replaceAssessment,
     updateAssessmentName,
+    updateAssessmentEmissionFactors,
     setActive,
   } = useAssessments(emissionFactors, handleAssessmentError);
 
@@ -137,6 +138,25 @@ function App() {
       fileInputRef.current.value = '';
     }
   };
+
+  /**
+   * Handles updating emission factors for the active assessment
+   * Extracted callback for better readability and memoization
+   */
+  const handleUpdateEmissionFactors = useCallback(
+    (customFactors: EmissionFactorsDatabase) => {
+      if (activeId) {
+        updateAssessmentEmissionFactors(activeId, customFactors);
+      } else {
+        logger.warn('Attempted to update emission factors without active assessment');
+        setErrors([{
+          field: 'system',
+          message: 'No active assessment to update'
+        }]);
+      }
+    },
+    [activeId, updateAssessmentEmissionFactors]
+  );
 
   if (loadError) {
     return (
@@ -263,7 +283,11 @@ function App() {
             aria-labelledby={`tab-${activeAssessment.id}`}
             className="space-y-6"
           >
-            <ResultsDisplay assessment={activeAssessment} />
+            <ResultsDisplay
+              assessment={activeAssessment}
+              emissionFactors={emissionFactors}
+              onUpdateEmissionFactors={handleUpdateEmissionFactors}
+            />
             <SystemChart assessment={activeAssessment} />
           </div>
         ) : null}

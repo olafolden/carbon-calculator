@@ -1,6 +1,7 @@
 import { useState, useCallback } from 'react';
 import { Assessment, BuildingData, EmissionFactorsDatabase } from '../types';
 import { calculateCarbonEmissions } from '../utils/calculator';
+import { mergeEmissionFactors } from '../utils/emissionFactorHelpers';
 import { MAX_ASSESSMENT_NAME_LENGTH } from '../constants';
 
 /**
@@ -278,6 +279,103 @@ export function useAssessments(
   );
 
   /**
+   * Update emission factors for an assessment and recalculate
+   */
+  const updateAssessmentEmissionFactors = useCallback(
+    (id: string, customFactors: EmissionFactorsDatabase) => {
+      if (!emissionFactors) {
+        const error = {
+          field: 'system',
+          message: 'Cannot update emission factors: emission factors not loaded',
+        };
+        console.error(error.message);
+        onError?.(error);
+        return { success: false, error: error.message };
+      }
+
+      try {
+        let assessmentFound = false;
+        let updateSuccess = false;
+
+        setAssessments((prev) => {
+          // Check if assessment exists
+          const assessment = prev.find(a => a.id === id);
+          if (!assessment) {
+            assessmentFound = false;
+            return prev;
+          }
+
+          assessmentFound = true;
+
+          return prev.map((assessment) => {
+            if (assessment.id !== id) return assessment;
+
+            try {
+              // Store custom factors (remove if empty)
+              const updatedAssessment: Assessment = {
+                ...assessment,
+                customEmissionFactors:
+                  Object.keys(customFactors).length > 0 ? customFactors : undefined,
+              };
+
+              // Recalculate with merged factors
+              const mergedFactors = mergeEmissionFactors(emissionFactors, customFactors);
+              const result = calculateCarbonEmissions(
+                assessment.buildingData,
+                mergedFactors
+              );
+              updatedAssessment.result = result;
+
+              updateSuccess = true;
+
+              // Log for debugging
+              if (Object.keys(customFactors).length === 0 && assessment.customEmissionFactors) {
+                console.info(`Cleared custom emission factors for assessment ${id}`);
+              }
+
+              return updatedAssessment;
+            } catch (calcError) {
+              console.error('Error during recalculation:', calcError);
+              return assessment; // Return unchanged on error
+            }
+          });
+        });
+
+        if (!assessmentFound) {
+          const error = {
+            field: 'assessment',
+            message: 'Assessment not found',
+          };
+          onError?.(error);
+          return { success: false, error: error.message };
+        }
+
+        if (!updateSuccess) {
+          const error = {
+            field: 'calculation',
+            message: 'Failed to recalculate with custom factors',
+          };
+          onError?.(error);
+          return { success: false, error: error.message };
+        }
+
+        return {
+          success: true,
+          cleared: Object.keys(customFactors).length === 0,
+          factorCount: Object.keys(customFactors).length,
+        };
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Recalculation failed';
+        const errorObj = { field: 'calculation', message };
+        console.error('Failed to update emission factors:', error);
+        onError?.(errorObj);
+        return { success: false, error: message };
+      }
+    },
+    [emissionFactors, onError]
+  );
+
+  /**
    * Set active assessment
    */
   const setActive = useCallback((id: string) => {
@@ -297,6 +395,7 @@ export function useAssessments(
     removeAssessment,
     replaceAssessment,
     updateAssessmentName,
+    updateAssessmentEmissionFactors,
     setActive,
   };
 }

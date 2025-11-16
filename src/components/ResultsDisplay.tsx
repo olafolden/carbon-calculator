@@ -1,15 +1,20 @@
-import React, { useCallback, useMemo } from 'react';
-import { Assessment } from '../types';
+import React, { useCallback, useMemo, useState } from 'react';
+import { Assessment, EmissionFactorsDatabase } from '../types';
 import { exportToCSV, downloadFile } from '../utils/calculator';
 import { DEFAULT_BENCHMARK } from '../config/benchmarks';
+import EmissionFactorModal from './EmissionFactorModal';
 
 interface ResultsDisplayProps {
   assessment: Assessment;
+  emissionFactors: EmissionFactorsDatabase | null;
+  onUpdateEmissionFactors: (customFactors: EmissionFactorsDatabase) => void;
 }
 
 export const ResultsDisplay: React.FC<ResultsDisplayProps> = React.memo(
-  ({ assessment }) => {
+  ({ assessment, emissionFactors, onUpdateEmissionFactors }) => {
   const result = assessment.result;
+  const [showEmissionFactorModal, setShowEmissionFactorModal] = useState(false);
+
   const handleExportCSV = useCallback(() => {
     const csv = exportToCSV(result);
     downloadFile(csv, 'carbon-calculation.csv', 'text/csv');
@@ -37,9 +42,28 @@ export const ResultsDisplay: React.FC<ResultsDisplayProps> = React.memo(
     <div className="space-y-6">
       {/* Header */}
       <div className="flex justify-between items-center">
-        <h2 className="text-2xl font-bold text-gray-900">
-          Carbon Calculation Results: <span className="text-blue-600">{assessment.name}</span>
-        </h2>
+        <div>
+          <h2 className="text-2xl font-bold text-gray-900">
+            Carbon Calculation Results: <span className="text-blue-600">{assessment.name}</span>
+          </h2>
+          {assessment.customEmissionFactors && (
+            <p className="text-sm text-blue-600 mt-1">
+              Custom emission factors applied
+            </p>
+          )}
+        </div>
+        <button
+          onClick={() => setShowEmissionFactorModal(true)}
+          disabled={!emissionFactors}
+          className={`px-4 py-2 rounded-lg transition-colors text-sm font-medium ${
+            emissionFactors
+              ? 'bg-blue-600 text-white hover:bg-blue-700'
+              : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+          }`}
+          title={!emissionFactors ? 'Emission factors not loaded' : 'Customize emission factors for this assessment'}
+        >
+          Customize Emission Factors
+        </button>
       </div>
 
       {/* Key Metrics */}
@@ -174,15 +198,45 @@ export const ResultsDisplay: React.FC<ResultsDisplayProps> = React.memo(
           Export as CSV
         </button>
       </div>
+
+      {/* Emission Factor Modal */}
+      {showEmissionFactorModal && emissionFactors && (
+        <EmissionFactorModal
+          defaultFactors={emissionFactors}
+          customFactors={assessment.customEmissionFactors}
+          onSave={onUpdateEmissionFactors}
+          onClose={() => setShowEmissionFactorModal(false)}
+        />
+      )}
+
+      {/* Error state if modal opened but factors not available */}
+      {showEmissionFactorModal && !emissionFactors && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white p-6 rounded-lg shadow-xl max-w-md">
+            <h3 className="text-lg font-semibold text-red-600 mb-2">Error</h3>
+            <p className="text-gray-700 mb-4">Emission factors not available</p>
+            <button
+              onClick={() => setShowEmissionFactorModal(false)}
+              className="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
   },
   (prevProps, nextProps) => {
-    // Only re-render if assessment ID, result, or name changed
+    // Return true if props are equal (skip re-render)
+    // Return false if props have changed (trigger re-render)
     return (
       prevProps.assessment.id === nextProps.assessment.id &&
       prevProps.assessment.result === nextProps.assessment.result &&
-      prevProps.assessment.name === nextProps.assessment.name
+      prevProps.assessment.name === nextProps.assessment.name &&
+      prevProps.assessment.customEmissionFactors === nextProps.assessment.customEmissionFactors &&
+      prevProps.emissionFactors === nextProps.emissionFactors &&
+      prevProps.onUpdateEmissionFactors === nextProps.onUpdateEmissionFactors
     );
   }
 );

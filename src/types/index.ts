@@ -129,4 +129,37 @@ export interface Assessment {
   result: CalculationResult;
   /** Timestamp when the assessment was created (milliseconds since epoch) */
   timestamp: number;
+  /** Custom emission factors for this assessment (overrides defaults) */
+  customEmissionFactors?: EmissionFactorsDatabase;
+}
+
+/**
+ * Building system categories for emission factor classification
+ */
+export type SystemType = 'Skin' | 'Superstructure' | 'Substructure';
+
+/**
+ * Emission factor enriched with metadata for UI display
+ */
+export interface EmissionFactorWithMeta extends EmissionFactor {
+  /** Layer identifier from the emission factors database */
+  id: string;
+  /** Building system this factor belongs to */
+  system: SystemType;
+  /** Whether this factor has been customized by the user */
+  isCustomized: boolean;
+}
+
+/**
+ * Props for the EmissionFactorModal component
+ */
+export interface EmissionFactorModalProps {
+  /** Default emission factors from the global database */
+  defaultFactors: EmissionFactorsDatabase;
+  /** Custom emission factors for this assessment (if any) */
+  customFactors?: EmissionFactorsDatabase;
+  /** Callback when user saves custom emission factors */
+  onSave: (customFactors: EmissionFactorsDatabase) => void;
+  /** Callback when user closes the modal without saving */
+  onClose: () => void;
 }
