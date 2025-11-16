@@ -35,6 +35,7 @@ function App() {
     replaceAssessment,
     updateAssessmentName,
     updateAssessmentEmissionFactors,
+    updateManualSystems,
     setActive,
   } = useAssessments(emissionFactors, handleAssessmentError);
 
@@ -156,6 +157,24 @@ function App() {
       }
     },
     [activeId, updateAssessmentEmissionFactors]
+  );
+
+  /**
+   * Handles updating manual systems for the active assessment
+   */
+  const handleUpdateManualSystems = useCallback(
+    (manualSystems: { spaceplan: number; service: number }) => {
+      if (activeId) {
+        updateManualSystems(activeId, manualSystems);
+      } else {
+        logger.warn('Attempted to update manual systems without active assessment');
+        setErrors([{
+          field: 'system',
+          message: 'No active assessment to update'
+        }]);
+      }
+    },
+    [activeId, updateManualSystems]
   );
 
   if (loadError) {
@@ -287,6 +306,7 @@ function App() {
               assessment={activeAssessment}
               emissionFactors={emissionFactors}
               onUpdateEmissionFactors={handleUpdateEmissionFactors}
+              onUpdateManualSystems={handleUpdateManualSystems}
             />
             <SystemChart assessment={activeAssessment} />
           </div>

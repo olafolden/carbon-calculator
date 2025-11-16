@@ -1,17 +1,19 @@
 import React, { useCallback, useMemo, useState } from 'react';
-import { Assessment, EmissionFactorsDatabase } from '../types';
+import { Assessment, EmissionFactorsDatabase, ManualSystemInputs } from '../types';
 import { exportToCSV, downloadFile } from '../utils/calculator';
 import { DEFAULT_BENCHMARK } from '../config/benchmarks';
 import EmissionFactorModal from './EmissionFactorModal';
+import { ManualSystemInput } from './ManualSystemInput';
 
 interface ResultsDisplayProps {
   assessment: Assessment;
   emissionFactors: EmissionFactorsDatabase | null;
   onUpdateEmissionFactors: (customFactors: EmissionFactorsDatabase) => void;
+  onUpdateManualSystems: (manualSystems: ManualSystemInputs) => void;
 }
 
 export const ResultsDisplay: React.FC<ResultsDisplayProps> = React.memo(
-  ({ assessment, emissionFactors, onUpdateEmissionFactors }) => {
+  ({ assessment, emissionFactors, onUpdateEmissionFactors, onUpdateManualSystems }) => {
   const result = assessment.result;
   const [showEmissionFactorModal, setShowEmissionFactorModal] = useState(false);
 
@@ -92,6 +94,13 @@ export const ResultsDisplay: React.FC<ResultsDisplayProps> = React.memo(
           <p className="text-sm text-gray-500">m²</p>
         </div>
       </div>
+
+      {/* Manual Systems Input */}
+      <ManualSystemInput
+        currentValues={assessment.manualSystems || { spaceplan: 0, service: 0 }}
+        gfa={result.gfa}
+        onUpdate={onUpdateManualSystems}
+      />
 
       {/* Benchmark Comparison */}
       <div className="bg-white p-6 rounded-lg shadow border border-gray-200">
@@ -235,8 +244,10 @@ export const ResultsDisplay: React.FC<ResultsDisplayProps> = React.memo(
       prevProps.assessment.result === nextProps.assessment.result &&
       prevProps.assessment.name === nextProps.assessment.name &&
       prevProps.assessment.customEmissionFactors === nextProps.assessment.customEmissionFactors &&
+      prevProps.assessment.manualSystems === nextProps.assessment.manualSystems &&
       prevProps.emissionFactors === nextProps.emissionFactors &&
-      prevProps.onUpdateEmissionFactors === nextProps.onUpdateEmissionFactors
+      prevProps.onUpdateEmissionFactors === nextProps.onUpdateEmissionFactors &&
+      prevProps.onUpdateManualSystems === nextProps.onUpdateManualSystems
     );
   }
 );

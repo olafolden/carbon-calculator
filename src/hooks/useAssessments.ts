@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import { Assessment, BuildingData, EmissionFactorsDatabase } from '../types';
+import { Assessment, BuildingData, EmissionFactorsDatabase, ManualSystemInputs } from '../types';
 import { calculateCarbonEmissions } from '../utils/calculator';
 import { mergeEmissionFactors } from '../utils/emissionFactorHelpers';
 import { MAX_ASSESSMENT_NAME_LENGTH } from '../constants';
@@ -376,6 +376,146 @@ export function useAssessments(
   );
 
   /**
+   * Update manual systems (Spaceplan and Service) for an assessment
+   */
+  const updateManualSystems = useCallback(
+    (id: string, manualSystems: ManualSystemInputs) => {
+      if (!emissionFactors) {
+        const error = {
+          field: 'system',
+          message: 'Cannot update manual systems: emission factors not loaded',
+        };
+        console.error(error.message);
+        onError?.(error);
+        return { success: false, error: error.message };
+      }
+
+      try {
+        let assessmentFound = false;
+        let updateSuccess = false;
+
+        setAssessments((prev) => {
+          // Check if assessment exists
+          const assessment = prev.find(a => a.id === id);
+          if (!assessment) {
+            assessmentFound = false;
+            return prev;
+          }
+
+          assessmentFound = true;
+
+          return prev.map((assessment) => {
+            if (assessment.id !== id) return assessment;
+
+            try {
+              // Clone building data and add/update manual systems
+              const updatedBuildingData: BuildingData = {
+                ...assessment.buildingData,
+                sLayers: [...assessment.buildingData.sLayers],
+              };
+
+              // Remove existing Spaceplan and Service systems if present
+              updatedBuildingData.sLayers = updatedBuildingData.sLayers.filter(
+                s => s.id !== 'Spaceplan' && s.id !== 'Service'
+              );
+
+              // Add Spaceplan system if value > 0
+              if (manualSystems.spaceplan > 0) {
+                updatedBuildingData.sLayers.push({
+                  id: 'Spaceplan',
+                  layers: [{
+                    id: 'Spaceplan',
+                    area: assessment.buildingData.main.gfa, // Use GFA as area
+                  }],
+                });
+              }
+
+              // Add Service system if value > 0
+              if (manualSystems.service > 0) {
+                updatedBuildingData.sLayers.push({
+                  id: 'Service',
+                  layers: [{
+                    id: 'Service',
+                    area: assessment.buildingData.main.gfa, // Use GFA as area
+                  }],
+                });
+              }
+
+              // Create custom emission factors for manual systems
+              const customFactors: EmissionFactorsDatabase = {
+                ...(assessment.customEmissionFactors || {}),
+              };
+
+              // Set emission factors to user input values
+              if (manualSystems.spaceplan > 0) {
+                customFactors['Spaceplan'] = {
+                  factor: manualSystems.spaceplan,
+                  unit: 'kgCO2e/m²',
+                  material: 'Space planning and interior fit-out',
+                };
+              }
+
+              if (manualSystems.service > 0) {
+                customFactors['Service'] = {
+                  factor: manualSystems.service,
+                  unit: 'kgCO2e/m²',
+                  material: 'Building services (HVAC, electrical, plumbing)',
+                };
+              }
+
+              // Merge with default emission factors
+              const mergedFactors = mergeEmissionFactors(emissionFactors, customFactors);
+
+              // Recalculate with updated building data
+              const result = calculateCarbonEmissions(updatedBuildingData, mergedFactors);
+
+              updateSuccess = true;
+
+              return {
+                ...assessment,
+                buildingData: updatedBuildingData,
+                customEmissionFactors: Object.keys(customFactors).length > 0 ? customFactors : undefined,
+                manualSystems,
+                result,
+              };
+            } catch (calcError) {
+              console.error('Error during manual systems update:', calcError);
+              return assessment; // Return unchanged on error
+            }
+          });
+        });
+
+        if (!assessmentFound) {
+          const error = {
+            field: 'assessment',
+            message: 'Assessment not found',
+          };
+          onError?.(error);
+          return { success: false, error: error.message };
+        }
+
+        if (!updateSuccess) {
+          const error = {
+            field: 'calculation',
+            message: 'Failed to recalculate with manual systems',
+          };
+          onError?.(error);
+          return { success: false, error: error.message };
+        }
+
+        return { success: true };
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Manual systems update failed';
+        const errorObj = { field: 'calculation', message };
+        console.error('Failed to update manual systems:', error);
+        onError?.(errorObj);
+        return { success: false, error: message };
+      }
+    },
+    [emissionFactors, onError]
+  );
+
+  /**
    * Set active assessment
    */
   const setActive = useCallback((id: string) => {
@@ -396,6 +536,7 @@ export function useAssessments(
     replaceAssessment,
     updateAssessmentName,
     updateAssessmentEmissionFactors,
+    updateManualSystems,
     setActive,
   };
 }

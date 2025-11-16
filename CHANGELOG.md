@@ -10,6 +10,160 @@
 
 ---
 
+## [Feature Update 3] - 2025-11-16
+
+### Manual Systems: Spaceplan and Service
+
+**Summary:** Added manual input capability for Spaceplan and Service systems that are not included in uploaded JSON files. These systems allow users to specify carbon intensity values (kgCO2e/m² GFA) which are automatically multiplied by the building's gross floor area.
+
+### New Features
+
+- **Manual System Input Component**
+  - Two input fields for Spaceplan (interior fit-out) and Service (HVAC, electrical, plumbing)
+  - Values specified in kgCO2e/m² GFA units
+  - Real-time calculation preview showing total emissions
+  - Validation: non-negative values with maximum of 200 kgCO2e/m² GFA
+  - User-friendly error messages and info boxes
+  - Positioned on results page after key metrics
+
+- **Per-Assessment Independence**
+  - Manual system values stored separately for each assessment
+  - Each assessment maintains its own Spaceplan and Service values
+  - Default values of 0 for both systems
+  - Values persist when switching between assessments
+
+- **Automatic Integration**
+  - Manual systems automatically appear in system breakdown
+  - Included in pie charts and bar charts
+  - Contribute to total embodied carbon calculations
+  - Update carbon intensity metrics
+
+- **Formula**: Total Emissions = Input Value (kgCO2e/m² GFA) × Gross Floor Area (m²)
+  - Example: 50 kgCO2e/m² × 10,000 m² = 500,000 kgCO2e
+
+### Files Created
+
+1. **`src/components/ManualSystemInput.tsx`** (~220 lines)
+   - Component for inputting manual system values
+   - Two number inputs with validation
+   - Real-time calculation preview
+   - Error handling and user feedback
+   - Update button to save changes
+
+2. **`feature-update-3.md`** (~800 lines)
+   - Complete feature documentation
+   - Architecture and implementation details
+   - User guide and examples
+   - Testing checklist and verification
+
+### Files Modified
+
+1. **`src/types/index.ts`**
+   - Added `'Spaceplan'` and `'Service'` to `SystemType` union (now 5 systems)
+   - Added `ManualSystemInputs` interface with spaceplan and service fields
+   - Added `manualSystems?: ManualSystemInputs` to `Assessment` interface
+
+2. **`src/data/emissionFactors.json`**
+   - Added "Spaceplan" emission factor (1.0 kgCO2e/m²)
+   - Added "Service" emission factor (1.0 kgCO2e/m²)
+   - Factor of 1.0 acts as multiplier since input is already in kgCO2e/m²
+
+3. **`src/utils/emissionFactorHelpers.ts`**
+   - Added 'Spaceplan' and 'Service' to SYSTEM_MAPPING
+   - Enables proper categorization and filtering
+
+4. **`src/hooks/useAssessments.ts`**
+   - Imported `ManualSystemInputs` type
+   - Added `updateManualSystems()` function
+   - Creates synthetic layers with area = GFA
+   - Sets emission factors to user input values
+   - Stores manual systems in assessment
+   - Recalculates emissions automatically
+   - Returns new function in hook API
+
+5. **`src/components/ResultsDisplay.tsx`**
+   - Imported `ManualSystemInput` component
+   - Added `onUpdateManualSystems` prop
+   - Integrated ManualSystemInput below key metrics
+   - Updated memoization comparison to include manualSystems
+   - Passes current values and GFA to input component
+
+6. **`src/App.tsx`**
+   - Destructured `updateManualSystems` from useAssessments hook
+   - Created `handleUpdateManualSystems` callback
+   - Passed callback to ResultsDisplay component
+
+7. **`CHANGELOG.md`** (this file)
+   - Documented Feature Update 3 changes
+
+### Technical Details
+
+**System Expansion:**
+- Original 3 systems: Skin, Superstructure, Substructure (from JSON)
+- New 2 systems: Spaceplan, Service (manual input)
+- Total: 5 building systems
+
+**Data Flow:**
+1. User uploads JSON with Skin, Superstructure, Substructure
+2. Results page displays with manual system input section
+3. User enters Spaceplan value (e.g., 50 kgCO2e/m² GFA)
+4. User enters Service value (e.g., 75 kgCO2e/m² GFA)
+5. User clicks "Update Manual Systems"
+6. Hook creates synthetic layers: `{ id: 'Spaceplan', area: GFA }`
+7. Hook creates custom emission factors with user input values
+8. Calculator recalculates: `emissions = GFA × input_value`
+9. Results update showing new systems in breakdown and charts
+
+**Calculation Example:**
+- Building GFA: 10,000 m²
+- Spaceplan input: 50 kgCO2e/m² GFA
+- Service input: 75 kgCO2e/m² GFA
+- Spaceplan total: 10,000 × 50 = 500,000 kgCO2e
+- Service total: 10,000 × 75 = 750,000 kgCO2e
+- Both included in building total and intensity calculations
+
+**Validation Rules:**
+- Minimum value: 0 (non-negative)
+- Maximum value: 200 kgCO2e/m² GFA
+- Empty inputs default to 0
+- Must be valid finite numbers
+
+**Backward Compatibility:**
+- Existing assessments without `manualSystems` default to `{ spaceplan: 0, service: 0 }`
+- No data migration required
+- Systems with 0 values don't appear in calculations
+- Feature is fully opt-in
+
+### Dependencies
+
+No new npm packages required. Uses:
+- React built-in hooks (useState, useCallback)
+- TypeScript for type safety
+- Tailwind CSS for styling (existing)
+
+### Testing Notes
+
+TypeScript compilation successful with no errors:
+- Type definitions properly extended
+- Component props correctly typed
+- Hook functions return expected types
+- No type conflicts or errors
+
+Functional requirements:
+- Input validation working (min 0, max 200)
+- Real-time preview calculations correct
+- Manual systems stored per-assessment
+- Calculations follow formula: input × GFA
+- Systems appear in breakdown and charts
+- Values persist across assessment switches
+- Default values of 0 work correctly
+
+### Related Documentation
+
+See `feature-update-3.md` for complete implementation details, user guide, architecture decisions, and testing checklist.
+
+---
+
 ## [Feature Update 2] - 2025-11-15
 
 ### Custom Emission Factors Feature

@@ -116,6 +116,16 @@ export interface ValidationError {
 }
 
 /**
+ * Manual system inputs for Spaceplan and Service systems
+ */
+export interface ManualSystemInputs {
+  /** Spaceplan carbon intensity (kgCO2e/m² GFA) */
+  spaceplan: number;
+  /** Service carbon intensity (kgCO2e/m² GFA) */
+  service: number;
+}
+
+/**
  * A single carbon assessment with its input data and calculation results
  */
 export interface Assessment {
@@ -131,12 +141,14 @@ export interface Assessment {
   timestamp: number;
   /** Custom emission factors for this assessment (overrides defaults) */
   customEmissionFactors?: EmissionFactorsDatabase;
+  /** Manual system inputs for Spaceplan and Service (kgCO2e/m² GFA) */
+  manualSystems?: ManualSystemInputs;
 }
 
 /**
  * Building system categories for emission factor classification
  */
-export type SystemType = 'Skin' | 'Superstructure' | 'Substructure';
+export type SystemType = 'Skin' | 'Superstructure' | 'Substructure' | 'Spaceplan' | 'Service';
 
 /**
  * Emission factor enriched with metadata for UI display

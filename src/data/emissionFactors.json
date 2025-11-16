@@ -78,5 +78,15 @@
     "factor": 135.0,
     "unit": "kgCO2e/m²",
     "material": "Reinforced concrete core wall"
+  },
+  "Spaceplan": {
+    "factor": 1.0,
+    "unit": "kgCO2e/m²",
+    "material": "Space planning and interior fit-out"
+  },
+  "Service": {
+    "factor": 1.0,
+    "unit": "kgCO2e/m²",
+    "material": "Building services (HVAC, electrical, plumbing)"
   }
 }

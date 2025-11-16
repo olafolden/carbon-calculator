@@ -30,6 +30,12 @@ const SYSTEM_MAPPING: Record<string, SystemType> = {
   'Basement Wall': 'Substructure',
   'Pile': 'Substructure',
   'Ground Floor Slab': 'Substructure',
+
+  // Spaceplan System - Interior fit-out and space planning
+  'Spaceplan': 'Spaceplan',
+
+  // Service System - Building services and MEP
+  'Service': 'Service',
 };
 
 /**
