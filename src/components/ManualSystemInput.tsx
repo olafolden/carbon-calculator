@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import type { ManualSystemInputs } from '../types';
 
 interface ManualSystemInputProps {
@@ -17,10 +17,16 @@ const MAX_VALUE = 200;
  * Component for inputting manual carbon system values (Spaceplan and Service)
  * These systems are calculated as: Input (kgCO2e/m² GFA) × GFA = Total Emissions
  */
-export function ManualSystemInput({ currentValues, gfa, onUpdate }: ManualSystemInputProps) {
+export const ManualSystemInput = React.memo(({ currentValues, gfa, onUpdate }: ManualSystemInputProps) => {
   const [spaceplan, setSpaceplan] = useState(currentValues.spaceplan.toString());
   const [service, setService] = useState(currentValues.service.toString());
   const [errors, setErrors] = useState<{ spaceplan?: string; service?: string }>({});
+
+  // Sync local state with prop changes to prevent stale data
+  useEffect(() => {
+    setSpaceplan(currentValues.spaceplan.toString());
+    setService(currentValues.service.toString());
+  }, [currentValues.spaceplan, currentValues.service]);
 
   /**
    * Validates a manual system input value
@@ -29,6 +35,11 @@ export function ManualSystemInput({ currentValues, gfa, onUpdate }: ManualSystem
     // Empty string is allowed (will default to 0)
     if (value.trim() === '') {
       return { valid: true, numValue: 0 };
+    }
+
+    // Reject scientific notation to prevent confusion
+    if (/[eE]/.test(value)) {
+      return { valid: false, error: `${name} cannot use scientific notation` };
     }
 
     const numValue = parseFloat(value);
@@ -97,16 +108,17 @@ export function ManualSystemInput({ currentValues, gfa, onUpdate }: ManualSystem
   /**
    * Calculates total emissions preview for a given input value
    */
-  const calculatePreview = (value: string): number | null => {
+  const calculatePreview = useCallback((value: string): number | null => {
     const validation = validateValue(value, '');
     if (validation.valid && validation.numValue !== undefined) {
       return validation.numValue * gfa;
     }
     return null;
-  };
+  }, [validateValue, gfa]);
 
-  const spaceplanPreview = calculatePreview(spaceplan);
-  const servicePreview = calculatePreview(service);
+  // Memoize preview calculations to avoid unnecessary recalculations
+  const spaceplanPreview = useMemo(() => calculatePreview(spaceplan), [calculatePreview, spaceplan]);
+  const servicePreview = useMemo(() => calculatePreview(service), [calculatePreview, service]);
 
   return (
     <div className="bg-white rounded-lg shadow-md p-6 mb-6">
@@ -135,20 +147,25 @@ export function ManualSystemInput({ currentValues, gfa, onUpdate }: ManualSystem
                   step="0.1"
                   value={spaceplan}
                   onChange={(e) => handleInputChange(e.target.value, 'spaceplan')}
+                  aria-label="Spaceplan carbon intensity in kilograms CO2 equivalent per square meter gross floor area"
+                  aria-describedby={errors.spaceplan ? "spaceplan-error" : "spaceplan-help"}
+                  aria-invalid={!!errors.spaceplan}
                   className={`w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
                     errors.spaceplan ? 'border-red-500' : 'border-gray-300'
                   }`}
                   placeholder="0"
                 />
-                <span className="absolute right-3 top-2 text-sm text-gray-500">
+                <span className="absolute right-3 top-2 text-sm text-gray-500" aria-hidden="true">
                   kgCO2e/m² GFA
                 </span>
               </div>
               {errors.spaceplan && (
-                <p className="mt-1 text-sm text-red-600">{errors.spaceplan}</p>
+                <p id="spaceplan-error" role="alert" className="mt-1 text-sm text-red-600">
+                  {errors.spaceplan}
+                </p>
               )}
               {!errors.spaceplan && spaceplanPreview !== null && (
-                <p className="mt-1 text-sm text-gray-600">
+                <p id="spaceplan-help" className="mt-1 text-sm text-gray-600">
                   Total: {spaceplanPreview.toLocaleString()} kgCO2e
                 </p>
               )}
@@ -172,20 +189,25 @@ export function ManualSystemInput({ currentValues, gfa, onUpdate }: ManualSystem
                   step="0.1"
                   value={service}
                   onChange={(e) => handleInputChange(e.target.value, 'service')}
+                  aria-label="Service carbon intensity in kilograms CO2 equivalent per square meter gross floor area"
+                  aria-describedby={errors.service ? "service-error" : "service-help"}
+                  aria-invalid={!!errors.service}
                   className={`w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
                     errors.service ? 'border-red-500' : 'border-gray-300'
                   }`}
                   placeholder="0"
                 />
-                <span className="absolute right-3 top-2 text-sm text-gray-500">
+                <span className="absolute right-3 top-2 text-sm text-gray-500" aria-hidden="true">
                   kgCO2e/m² GFA
                 </span>
               </div>
               {errors.service && (
-                <p className="mt-1 text-sm text-red-600">{errors.service}</p>
+                <p id="service-error" role="alert" className="mt-1 text-sm text-red-600">
+                  {errors.service}
+                </p>
               )}
               {!errors.service && servicePreview !== null && (
-                <p className="mt-1 text-sm text-gray-600">
+                <p id="service-help" className="mt-1 text-sm text-gray-600">
                   Total: {servicePreview.toLocaleString()} kgCO2e
                 </p>
               )}
@@ -213,4 +235,14 @@ export function ManualSystemInput({ currentValues, gfa, onUpdate }: ManualSystem
       </div>
     </div>
   );
-}
+}, (prevProps, nextProps) => {
+  // Return true if props are equal (skip re-render)
+  return (
+    prevProps.currentValues.spaceplan === nextProps.currentValues.spaceplan &&
+    prevProps.currentValues.service === nextProps.currentValues.service &&
+    prevProps.gfa === nextProps.gfa &&
+    prevProps.onUpdate === nextProps.onUpdate
+  );
+});
+
+ManualSystemInput.displayName = 'ManualSystemInput';

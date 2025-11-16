@@ -117,11 +117,24 @@ export interface ValidationError {
 
 /**
  * Manual system inputs for Spaceplan and Service systems
+ *
+ * These values represent carbon intensity that will be multiplied by GFA to calculate total emissions.
+ * They are stored separately from the building data structure and applied during calculation
+ * by creating temporary building layers with custom emission factors.
+ *
+ * Valid range: 0-200 kgCO2e/m² GFA
+ *
+ * Calculation formula: Total Emissions = Input Value × Gross Floor Area
+ *
+ * Example:
+ * - GFA: 10,000 m²
+ * - Spaceplan: 50 kgCO2e/m² GFA
+ * - Result: 50 × 10,000 = 500,000 kgCO2e
  */
 export interface ManualSystemInputs {
-  /** Spaceplan carbon intensity (kgCO2e/m² GFA) */
+  /** Spaceplan carbon intensity (kgCO2e/m² GFA). Range: 0-200. Covers interior fit-out and space planning. */
   spaceplan: number;
-  /** Service carbon intensity (kgCO2e/m² GFA) */
+  /** Service carbon intensity (kgCO2e/m² GFA). Range: 0-200. Covers HVAC, electrical, and plumbing systems. */
   service: number;
 }
 

@@ -376,6 +376,45 @@ export function useAssessments(
   );
 
   /**
+   * Helper function to add a manual system layer if value > 0
+   */
+  const addManualSystemLayer = (
+    systemId: 'Spaceplan' | 'Service',
+    value: number,
+    gfa: number
+  ) => {
+    if (value > 0) {
+      return {
+        id: systemId,
+        layers: [{
+          id: systemId,
+          area: gfa,
+        }],
+      };
+    }
+    return null;
+  };
+
+  /**
+   * Helper function to create emission factor for a manual system
+   */
+  const createManualSystemFactor = (
+    systemId: 'Spaceplan' | 'Service',
+    value: number
+  ) => {
+    const materials = {
+      Spaceplan: 'Space planning and interior fit-out',
+      Service: 'Building services (HVAC, electrical, plumbing)',
+    };
+
+    return {
+      factor: value,
+      unit: 'kgCO2e/m²' as const,
+      material: materials[systemId],
+    };
+  };
+
+  /**
    * Update manual systems (Spaceplan and Service) for an assessment
    */
   const updateManualSystems = useCallback(
@@ -408,59 +447,39 @@ export function useAssessments(
             if (assessment.id !== id) return assessment;
 
             try {
-              // Clone building data and add/update manual systems
+              const gfa = assessment.buildingData.main.gfa;
+
+              // Clone building data and remove existing manual systems
               const updatedBuildingData: BuildingData = {
                 ...assessment.buildingData,
-                sLayers: [...assessment.buildingData.sLayers],
+                sLayers: assessment.buildingData.sLayers.filter(
+                  s => s.id !== 'Spaceplan' && s.id !== 'Service'
+                ),
               };
 
-              // Remove existing Spaceplan and Service systems if present
-              updatedBuildingData.sLayers = updatedBuildingData.sLayers.filter(
-                s => s.id !== 'Spaceplan' && s.id !== 'Service'
-              );
+              // Add manual system layers if values > 0
+              const spaceplanLayer = addManualSystemLayer('Spaceplan', manualSystems.spaceplan, gfa);
+              const serviceLayer = addManualSystemLayer('Service', manualSystems.service, gfa);
 
-              // Add Spaceplan system if value > 0
-              if (manualSystems.spaceplan > 0) {
-                updatedBuildingData.sLayers.push({
-                  id: 'Spaceplan',
-                  layers: [{
-                    id: 'Spaceplan',
-                    area: assessment.buildingData.main.gfa, // Use GFA as area
-                  }],
-                });
-              }
+              if (spaceplanLayer) updatedBuildingData.sLayers.push(spaceplanLayer);
+              if (serviceLayer) updatedBuildingData.sLayers.push(serviceLayer);
 
-              // Add Service system if value > 0
-              if (manualSystems.service > 0) {
-                updatedBuildingData.sLayers.push({
-                  id: 'Service',
-                  layers: [{
-                    id: 'Service',
-                    area: assessment.buildingData.main.gfa, // Use GFA as area
-                  }],
-                });
-              }
-
-              // Create custom emission factors for manual systems
+              // Create custom emission factors, preserving non-manual custom factors
               const customFactors: EmissionFactorsDatabase = {
                 ...(assessment.customEmissionFactors || {}),
               };
 
-              // Set emission factors to user input values
+              // Remove old manual system factors first
+              delete customFactors['Spaceplan'];
+              delete customFactors['Service'];
+
+              // Add new manual system factors only if value > 0
               if (manualSystems.spaceplan > 0) {
-                customFactors['Spaceplan'] = {
-                  factor: manualSystems.spaceplan,
-                  unit: 'kgCO2e/m²',
-                  material: 'Space planning and interior fit-out',
-                };
+                customFactors['Spaceplan'] = createManualSystemFactor('Spaceplan', manualSystems.spaceplan);
               }
 
               if (manualSystems.service > 0) {
-                customFactors['Service'] = {
-                  factor: manualSystems.service,
-                  unit: 'kgCO2e/m²',
-                  material: 'Building services (HVAC, electrical, plumbing)',
-                };
+                customFactors['Service'] = createManualSystemFactor('Service', manualSystems.service);
               }
 
               // Merge with default emission factors
